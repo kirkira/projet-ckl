@@ -5,6 +5,7 @@ use Google::Search;
 use LWP::UserAgent;
 use Getopt::Long;
 use HTML::ContentExtractor;
+use Text::Language::Guess
 
 my $query = "perl modules";       # requete par defaut
 
@@ -14,6 +15,7 @@ or die("Erreur dans les arguments (syntaxe d'une requete : --query=\"la requete\
 my $agent = LWP::UserAgent->new();
 my $extractor = HTML::ContentExtractor->new();
 my $search = Google::Search->new(query=>$query,service=>web);
+my $guesser = Text::Language::Guess->new();
 my $count = 0;
 
 while ((my $result = $search->next) && ($count < 50)) {
@@ -29,6 +31,11 @@ while ((my $result = $search->next) && ($count < 50)) {
 		$extractor->extract($uri,$dec_cont);
 		$text = $extractor->as_text();
 		#print text;
+		
+		# Guess language
+		my $lang = $guesser->language_guess($text);
+		#print "La langue est certainement : "+$lang;
+		
 		# continuer ici l'analyse de $text ...
 	}
 	else {
@@ -47,6 +54,6 @@ Options:
 
 =head1 DESCRIPTION
 Ce programme envoie une requete a Google, recupere les 50 premieres reponses,
-extrait le texte des pages, determine la langue, lemmatise tous les mots et effectue un analyse 
+extrait le texte des pages, determine la langue, lemmatise tous les mots et effectue une analyse 
 en bigrammes et trigrammes.
 =cut
