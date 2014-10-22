@@ -21,7 +21,6 @@ my $extractor = HTML::ContentExtractor->new();
 my $search = Google::Search->new(query=>$query,service=>web);
 my $guesser = Text::Language::Guess->new();
 my $stemmer = Lingua::Stem->new();
-$stemmer->stem_caching({-level => 2});
 my $ng = Text::Ngrams->new(type => word, windowsize => 2);
 my $count = 0;
 
@@ -35,25 +34,26 @@ while ((my $result = $search->next) && ($count < 50)) {
         $dec_cont = $response->decoded_content;
         $extractor->extract($uri,$dec_cont);
         $text = $extractor->as_text();
-        my $lang;
+        my$lang;
         
         if($text) {
-            if($guess == 1) {
-                # Guess language
-                $lang = $guesser->language_guess_string($text);
+			my @text_array = split(/\s/,$text);
+			my $joined_text = join(' ',@text_array);
+            if($guess != 0) {
+                $lang = $guesser->language_guess_string($joined_text);
                 print "La langue est certainement : ", $lang, "\n";
             }
             
-			if($stem == 1) {
-				my @text_array = split(' ',$text);
+			if($stem != 0) {
+				my @text_array = split(/\s/,$text);
 				my $locale = 'en';
 				if($lang) {
 					$locale = $lang;
 				}
 				
-				$stemmer = set_locale($locale);
-	            my $stemmed_words_anon_array = $stemmer->stem(@text_array);
-	            $ng->process_text(join(' ',$stemmed_words_anon_array));
+				$stemmer->set_locale($locale);
+	            my @stemmed_words = @{$stemmer->stem(@text_array)};
+	            $ng->process_text(join(' ',@stemmed_words));
 			}
 			
 			else {
