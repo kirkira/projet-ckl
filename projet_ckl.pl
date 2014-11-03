@@ -10,15 +10,17 @@ use LWP::Protocol::https;
 use Lingua::Stem;
 use Text::Ngrams;
 use Class::CSV;
+use File::Path qw(make_path);
 
 my $query = "perl modules"; # requete par defaut
 my $guess = 0;
 my $stem = 0;
 my $export_file = "ckl_results.txt";
 my $csvfile = 0;
+my $cash = 0;
 
-GetOptions ('query=s' => \$query, 'guess' => \$guess, 'stem' => \$stem, 'csvfile' => \$csvfile) 
-or die("Erreur dans les arguments (syntaxe d'une requete : --query=\"la requete\", pour determiner la langue : --guess, pour utiliser le stemmer : --stem, pour faire un export csv : --csvfile)\n");
+GetOptions ('query=s' => \$query, 'guess' => \$guess, 'stem' => \$stem, 'csvfile' => \$csvfile, 'cash' => \$cash) 
+or die("Erreur dans les arguments (syntaxe d'une requete : --query=\"la requete\", pour determiner la langue : --guess, pour utiliser le stemmer : --stem, pour faire un export csv : --csvfile, pour stocker les resultats pour chaque requete : --cash)\n");
 
 my $agent = LWP::UserAgent->new();
 my $extractor = HTML::ContentExtractor->new();
@@ -28,54 +30,134 @@ my $stemmer = Lingua::Stem->new();
 my $ng = Text::Ngrams->new(type => word, windowsize => 3);
 my $count = 0;
 
-while ((my $result = $search->next) && ($count < 50)) {
-    $uri = $result->uri;
-    print "\n", $result->rank, " ", $uri, "\n";
-    $count++;
-    my $response = $agent->get($result->uri);
-    
-    if ($response->is_success) {
-        $dec_cont = $response->decoded_content;
-        $extractor->extract($uri,$dec_cont);
-        $text = $extractor->as_text();
-        my$lang;
-        
-        if($text) {
-			my @text_array = split(/\s/,$text);
-			my $joined_text = join(' ',@text_array);
-            if($guess != 0) {
-                $lang = $guesser->language_guess_string($joined_text);
-                print "La langue est certainement : ", $lang, "\n";
-            }
-            
-			if($stem != 0) {
+if($cash == 0) { # on fait une recherche Google a chaque fois
+	while ((my $result = $search->next) && ($count < 50)) {
+	    $uri = $result->uri;
+	    print "\n", $result->rank, " ", $uri, "\n";
+	    $count++;
+	    my $response = $agent->get($result->uri);
+	    
+	    if ($response->is_success) {
+	        $dec_cont = $response->decoded_content;
+	        $extractor->extract($uri,$dec_cont);
+	        $text = $extractor->as_text();
+	        my $lang;
+	        
+	        if($text) {
 				my @text_array = split(/\s/,$text);
-				my $locale = 'en'; #langue par defaut
-				if($lang) {
-					$locale = $lang;
+				my $joined_text = join(' ',@text_array);
+	            if($guess != 0) {
+	                $lang = $guesser->language_guess_string($joined_text);
+	                print "La langue est certainement : ", $lang, "\n";
+	            }
+	            
+				if($stem != 0) {
+					my @text_array = split(/\s/,$text);
+					my $locale = 'en'; #langue par defaut
+					if($lang) {
+						$locale = $lang;
+					}
+					
+					$stemmer->set_locale($locale);
+		            		my @stemmed_words = @{$stemmer->stem(@text_array)};
+		            		$ng->process_text(join(' ',@stemmed_words));
 				}
 				
-				$stemmer->set_locale($locale);
-	            		my @stemmed_words = @{$stemmer->stem(@text_array)};
-	            		$ng->process_text(join(' ',@stemmed_words));
+				else {
+					$ng->process_text($text);
+				}
+	        }
+	
+	        else {
+	            print "Page sans bloc de texte\n";
+	            $count--;
+	        }
+	    }
+	    
+	    else {
+	        warn $response->status_line;
+	        $count--;
+	    }
+	}
+}
+else { # on stocke les resultats 
+	my $path = './pages/';
+	my $cash_exists = 0;
+	opendir(my $DIR, $path);
+	while (my $entry = readdir $DIR) {
+		if(-d $path . $entry && $entry eq $query) {
+			$cash_exists = 1;
+		}
+	}
+	closedir $DIR;
+	
+	if($cash_exists == 0) { # requete jamais rencontree - on fait une recherche google
+		make_path($path.$query);
+		while ((my $result = $search->next) && ($count < 50)) {
+		    $uri = $result->uri;
+		    print "\n", $result->rank, " ", $uri, "\n";
+		    $count++;
+		    my $response = $agent->get($result->uri);
+		    
+		    if ($response->is_success) {
+		        $dec_cont = $response->decoded_content;
+		        $extractor->extract($uri,$dec_cont);
+		        $text = $extractor->as_text();
+		        
+		        if($text) {
+						open my $fh, ">:encoding(utf8)", $path.$query."/page".$count.".txt" or die "creation du fichier de la page ".$count." : $!";
+						print $fh $text;
+						close $fh;
+				}
+				else {
+					print "Page sans bloc de texte\n";
+					$count--;
+				}
+			}
+			else {
+				warn $response->status_line;
+				$count--;
+			}
+		}
+	}
+	
+	opendir(DH,$path.$query);
+	my @results = readdir(DH);
+	for my $page(@results) {
+		open my $handle, "<", $path.$query.'/'.$page or die "Cannot open file ".$path.$query.'/'.$page." : $!";
+		my $str = "";
+		while (<$handle>){
+			$str .= $_;
+		}
+		close $handle;
+		my $lang;
+		if($str) {
+		my @text_array = split(/\s/,$str);
+		my $joined_text = join(' ',@text_array);
+		if($guess != 0) {
+			$lang = $guesser->language_guess_string($joined_text);
+			print "La langue est certainement : ", $lang, "\n";
+		}
+		
+		if($stem != 0) {
+			my @text_array = split(/\s/,$str);
+			my $locale = 'en'; #langue par defaut
+			if($lang) {
+				$locale = $lang;
 			}
 			
-			else {
-				$ng->process_text($text);
-			}
-        }
-
-        else {
-            print "Page sans bloc de texte\n";
-            $count--;
-        }
-    }
-    
-    else {
-        warn $response->status_line;
-        $count--;
-    }
+			$stemmer->set_locale($locale);
+            		my @stemmed_words = @{$stemmer->stem(@text_array)};
+            		$ng->process_text(join(' ',@stemmed_words));
+		}
+		
+		else {
+			$ng->process_text($str);
+		}
+	}
+	}
 }
+	
 my @ngram_array = $ng->get_ngrams(orderby=>frequency);
 
 # AFFICHAGE DES RESULTATS
@@ -169,6 +251,7 @@ Options:
 --guess Si on veut determiner la langue.
 --stem Si on veut utiliser un stemmer.
 --csvfile Si on veut exporter les n-grammes dans des fichiers .csv.
+--cash Si on veut stocker les resultats de la recherche Google pour chaque requete.
 =head1 DESCRIPTION
 Ce programme envoie une requete a Google,
 recupere les 50 premieres reponses, extrait le texte des pages,
