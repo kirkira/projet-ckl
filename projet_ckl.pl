@@ -25,7 +25,7 @@ my $extractor = HTML::ContentExtractor->new();
 my $search = Google::Search->new(query=>$query,service=>web);
 my $guesser = Text::Language::Guess->new();
 my $stemmer = Lingua::Stem->new();
-my $ng = Text::Ngrams->new(type => word, windowsize => 2);
+my $ng = Text::Ngrams->new(type => word, windowsize => 3);
 my $count = 0;
 
 while ((my $result = $search->next) && ($count < 50)) {
@@ -85,7 +85,7 @@ my @lines = split('\n',$ng->to_string(orderby=>frequency));
 unless(open FILE, '>'.$export_file){
 	die "Impossible d'ouvrir le fichier $export_file";
 }
-print FILE $ng->to_string(orderby=>frequency);
+print $ng->to_string(orderby=>frequency, out=>$export_file);
 close FILE;
 
 if($csvfile != 0) {		
@@ -101,27 +101,41 @@ if($csvfile != 0) {
 
 	my $indicator = 0;
 	# remplissage des buffers csv
-	foreach my $line(@lines){
-		if ($line =~ /([A-Z]+|-)/){
+	my $line = shift @lines;
+	
+	while(!($line =~ /2-GRAMS \(total count: (\d)*\)/)){
+		if ($line =~ /([A-Z]+|-)/ && $indicator < 5){
 			$indicator++;
 		}
 		if ($indicator > 4){
-			if ($indicator < 6){
-				$csv1->add_line([split('\t',$line)]);
-			}
+			$csv1->add_line([split('\t',$line)]);
 		}
-		if ($indicator > 8){
-			if ($indicator < 10){
-				$csv2->add_line([split('\t',$line)]);
-			}
-		}
-		if ($indicator > 10){
-			if ($indicator < 14){
-				$csv3->add_line([split('\t',$line)]);
-			}
-		}
-		
+		$line = shift @lines;
 	}
+	
+	$indicator = 0;
+	while(!($line =~ /3-GRAMS \(total count: (\d)*\)/)){
+		if ($line =~ /([A-Z]+|-)/ && $indicator < 5){
+			$indicator++;
+		}
+		if ($indicator > 4){
+			$csv2->add_line([split('\t',$line)]);
+		}
+		$line = shift @lines;
+
+	}
+	
+	$indicator = 0;
+	while(!($line =~ /END OUTPUT BY Text::Ngrams/)){
+		if ($line =~ /([A-Z]+|-)/ && $indicator < 5){
+			$indicator++;
+		}
+		if ($indicator > 4){
+			$csv3->add_line([split('\t',$line)]);
+		}
+		$line = shift @lines;
+	}
+	
 	
 	# creation des fichiers CSV
 
