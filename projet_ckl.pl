@@ -22,6 +22,11 @@ my $cash = 0;
 GetOptions ('query=s' => \$query, 'guess' => \$guess, 'stem' => \$stem, 'csvfile' => \$csvfile, 'cash' => \$cash) 
 or die("Erreur dans les arguments (syntaxe d'une requete : --query=\"la requete\", pour determiner la langue : --guess, pour utiliser le stemmer : --stem, pour faire un export csv : --csvfile, pour stocker les resultats pour chaque requete : --cash)\n");
 
+my $number = 50; #nombre de pages par defaut
+
+GetOptions ('query=s' => \$query, 'number=n' => \$number,'guess' => \$guess, 'stem' => \$stem, 'csvfile' => \$csvfile) 
+or die("Erreur dans les arguments (syntaxe d'une requete : --query=\"la requete\", pour choisir le nombre de pages : --number=n, pour determiner la langue : --guess, pour utiliser le stemmer : --stem, pour faire un export csv : --csvfile)\n");
+
 my $agent = LWP::UserAgent->new();
 my $extractor = HTML::ContentExtractor->new();
 my $search = Google::Search->new(query=>$query,service=>web);
@@ -44,6 +49,28 @@ if($cash == 0) { # on fait une recherche Google a chaque fois
 	        my $lang;
 	        
 	        if($text) {
+
+while ((my $result = $search->next) && ($count < $number)) {
+    $uri = $result->uri;
+    print "\n", $result->rank, " ", $uri, "\n";
+    $count++;
+    my $response = $agent->get($result->uri);
+    
+    if ($response->is_success) {
+        $dec_cont = $response->decoded_content;
+        $extractor->extract($uri,$dec_cont);
+        $text = $extractor->as_text();
+        my$lang;
+        
+        if($text) {
+			my @text_array = split(/\s/,$text);
+			my $joined_text = join(' ',@text_array);
+            if($guess != 0) {
+                $lang = $guesser->language_guess_string($joined_text);
+                print "La langue est certainement : ", $lang, "\n";
+            }
+            
+			if($stem != 0) {
 				my @text_array = split(/\s/,$text);
 				my $joined_text = join(' ',@text_array);
 	            if($guess != 0) {
