@@ -16,9 +16,10 @@ my $guess = 0;
 my $stem = 0;
 my $export_file = "ckl_results.txt";
 my $csvfile = 0;
+my $pages = 50; #nombre de pages par defaut
 
-GetOptions ('query=s' => \$query, 'guess' => \$guess, 'stem' => \$stem, 'csvfile' => \$csvfile) 
-or die("Erreur dans les arguments (syntaxe d'une requete : --query=\"la requete\", pour determiner la langue : --guess, pour utiliser le stemmer : --stem, pour faire un export csv : --csvfile)\n");
+GetOptions ('query=s' => \$query, 'pages=p' => \$pages,'guess' => \$guess, 'stem' => \$stem, 'csvfile' => \$csvfile) 
+or die("Erreur dans les arguments (syntaxe d'une requete : --query=\"la requete\", pour choisir le nombre de pages : --number=n, pour determiner la langue : --guess, pour utiliser le stemmer : --stem, pour faire un export csv : --csvfile)\n");
 
 my $agent = LWP::UserAgent->new();
 my $extractor = HTML::ContentExtractor->new();
@@ -28,7 +29,7 @@ my $stemmer = Lingua::Stem->new();
 my $ng = Text::Ngrams->new(type => word, windowsize => 3);
 my $count = 0;
 
-while ((my $result = $search->next) && ($count < 50)) {
+while ((my $result = $search->next) && ($count < $pages)) {
     $uri = $result->uri;
     print "\n", $result->rank, " ", $uri, "\n";
     $count++;
