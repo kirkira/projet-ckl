@@ -17,15 +17,12 @@ my $guess = 0;
 my $stem = 0;
 my $export_file = "ckl_results.txt";
 my $csvfile = 0;
-my $cash = 0;
-
-GetOptions ('query=s' => \$query, 'guess' => \$guess, 'stem' => \$stem, 'csvfile' => \$csvfile, 'cash' => \$cash) 
-or die("Erreur dans les arguments (syntaxe d'une requete : --query=\"la requete\", pour determiner la langue : --guess, pour utiliser le stemmer : --stem, pour faire un export csv : --csvfile, pour stocker les resultats pour chaque requete : --cash)\n");
+my $cache = 0;
 
 my $number = 50; #nombre de pages par defaut
 
-GetOptions ('query=s' => \$query, 'number=n' => \$number,'guess' => \$guess, 'stem' => \$stem, 'csvfile' => \$csvfile) 
-or die("Erreur dans les arguments (syntaxe d'une requete : --query=\"la requete\", pour choisir le nombre de pages : --number=n, pour determiner la langue : --guess, pour utiliser le stemmer : --stem, pour faire un export csv : --csvfile)\n");
+GetOptions ('query=s' => \$query, 'number=n' => \$number,'guess' => \$guess, 'stem' => \$stem, 'csvfile' => \$csvfile, 'cache' => \$cache) 
+or die("Erreur dans les arguments (syntaxe d'une requete : --query=\"la requete\", pour choisir le nombre de pages : --number=n, pour determiner la langue : --guess, pour utiliser le stemmer : --stem, pour faire un export csv : --csvfile, pour stocker les resultats de la recherche : --cache)\n");
 
 my $agent = LWP::UserAgent->new();
 my $extractor = HTML::ContentExtractor->new();
@@ -35,8 +32,9 @@ my $stemmer = Lingua::Stem->new();
 my $ng = Text::Ngrams->new(type => word, windowsize => 3);
 my $count = 0;
 
-if($cash == 0) { # on fait une recherche Google a chaque fois
-	while ((my $result = $search->next) && ($count < 50)) {
+if($cache == 0) { # on fait une recherche Google a chaque fois
+
+	while ((my $result = $search->next) && ($count < $number)) {
 	    $uri = $result->uri;
 	    print "\n", $result->rank, " ", $uri, "\n";
 	    $count++;
@@ -46,31 +44,9 @@ if($cash == 0) { # on fait une recherche Google a chaque fois
 	        $dec_cont = $response->decoded_content;
 	        $extractor->extract($uri,$dec_cont);
 	        $text = $extractor->as_text();
-	        my $lang;
+	        my$lang;
 	        
 	        if($text) {
-
-while ((my $result = $search->next) && ($count < $number)) {
-    $uri = $result->uri;
-    print "\n", $result->rank, " ", $uri, "\n";
-    $count++;
-    my $response = $agent->get($result->uri);
-    
-    if ($response->is_success) {
-        $dec_cont = $response->decoded_content;
-        $extractor->extract($uri,$dec_cont);
-        $text = $extractor->as_text();
-        my$lang;
-        
-        if($text) {
-			my @text_array = split(/\s/,$text);
-			my $joined_text = join(' ',@text_array);
-            if($guess != 0) {
-                $lang = $guesser->language_guess_string($joined_text);
-                print "La langue est certainement : ", $lang, "\n";
-            }
-            
-			if($stem != 0) {
 				my @text_array = split(/\s/,$text);
 				my $joined_text = join(' ',@text_array);
 	            if($guess != 0) {
@@ -80,47 +56,56 @@ while ((my $result = $search->next) && ($count < $number)) {
 	            
 				if($stem != 0) {
 					my @text_array = split(/\s/,$text);
-					my $locale = 'en'; #langue par defaut
-					if($lang) {
-						$locale = $lang;
+					my $joined_text = join(' ',@text_array);
+		            if($guess != 0) {
+		                $lang = $guesser->language_guess_string($joined_text);
+		                print "La langue est certainement : ", $lang, "\n";
+		            }
+		            
+					if($stem != 0) {
+						my @text_array = split(/\s/,$text);
+						my $locale = 'en'; #langue par defaut
+						if($lang) {
+							$locale = $lang;
+						}
+						
+						$stemmer->set_locale($locale);
+			            		my @stemmed_words = @{$stemmer->stem(@text_array)};
+			            		$ng->process_text(join(' ',@stemmed_words));
 					}
 					
-					$stemmer->set_locale($locale);
-		            		my @stemmed_words = @{$stemmer->stem(@text_array)};
-		            		$ng->process_text(join(' ',@stemmed_words));
-				}
-				
-				else {
-					$ng->process_text($text);
-				}
-	        }
-	
-	        else {
-	            print "Page sans bloc de texte\n";
-	            $count--;
-	        }
-	    }
-	    
-	    else {
-	        warn $response->status_line;
-	        $count--;
-	    }
+					else {
+						$ng->process_text($text);
+					}
+		        }
+		
+		        else {
+		            print "Page sans bloc de texte\n";
+		            $count--;
+		        }
+		    }
+		    
+		    else {
+		        warn $response->status_line;
+		        $count--;
+		    }
+		}
 	}
 }
 else { # on stocke les resultats 
 	my $path = './pages/';
-	my $cash_exists = 0;
+	my $cache_exists = 0;
 	opendir(my $DIR, $path);
 	while (my $entry = readdir $DIR) {
 		if(-d $path . $entry && $entry eq $query) {
-			$cash_exists = 1;
+			$cache_exists = 1;
 		}
 	}
 	closedir $DIR;
 	
-	if($cash_exists == 0) { # requete jamais rencontree - on fait une recherche google
+	if($cache_exists == 0) { # requete jamais rencontree - on fait une recherche google
 		make_path($path.$query);
-		while ((my $result = $search->next) && ($count < 50)) {
+		while ((my $result = $search->next) && ($count < $number)) {
 		    $uri = $result->uri;
 		    print "\n", $result->rank, " ", $uri, "\n";
 		    $count++;
@@ -272,13 +257,14 @@ if($csvfile != 0) {
 projet_ckl.pl - Analyse des 50 reponses de Google
 =head1 SYNOPSIS
 projet_ckl.pl
-projet_ckl.pl --query="cute puppies" --guess --stem
+projet_ckl.pl --query="cute puppies" --guess --stem --number=20 --cache
 Options:
 --query Ce qu'on cherche sur Google.
+--number Le nombre de reponses a analyser.
 --guess Si on veut determiner la langue.
 --stem Si on veut utiliser un stemmer.
 --csvfile Si on veut exporter les n-grammes dans des fichiers .csv.
---cash Si on veut stocker les resultats de la recherche Google pour chaque requete.
+--cache Si on veut stocker les resultats de la recherche Google pour chaque requete.
 =head1 DESCRIPTION
 Ce programme envoie une requete a Google,
 recupere les 50 premieres reponses, extrait le texte des pages,
