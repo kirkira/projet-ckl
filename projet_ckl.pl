@@ -87,6 +87,7 @@ unless(open FILE, '>'.$export_file){
 }
 print $ng->to_string(orderby=>frequency, out=>$export_file);
 close FILE;
+print "Le resultat a ete enregistre dans le fichier ckl_resultats.txt.\n";
 
 if($csvfile != 0) {		
 	# creation des buffers CSV
@@ -154,6 +155,8 @@ if($csvfile != 0) {
 	close $fh1;
 	close $fh2;
 	close $fh3;
+	print "Les resultat ont ete enregistres dans 3 fichiers ckl_*grams.csv.\n";
+
 }
 
 =head1 NAME
@@ -165,6 +168,7 @@ Options:
 --query Ce qu'on cherche sur Google.
 --guess Si on veut determiner la langue.
 --stem Si on veut utiliser un stemmer.
+--csvfile Si on veut exporter les n-grammes dans des fichiers .csv.
 =head1 DESCRIPTION
 Ce programme envoie une requete a Google,
 recupere les 50 premieres reponses, extrait le texte des pages,
