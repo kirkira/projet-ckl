@@ -158,16 +158,21 @@ else { # on stocke les resultats
 				$locale = $lang;
 			}
 			
-			$stemmer->set_locale($locale);
-            		my @stemmed_words = @{$stemmer->stem(@text_array)};
-            		$ng->process_text(join(' ',@stemmed_words));
+			eval {
+				$stemmer->set_locale($locale);
+			} or do {
+				$stemmer->set_locale('en'); # on remplace les langues non reconnues par le stemmer par l'anglais
+			};
+			
+            my @stemmed_words = @{$stemmer->stem(@text_array)};
+            $ng->process_text(join(' ',@stemmed_words));
 		}
 		
 		else {
 			$ng->process_text($str);
 		}
 	}
-	}
+}
 }
 	
 my @ngram_array = $ng->get_ngrams(orderby=>frequency);
